@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>СМЕШАРИКИ: ДОЛИНА МОЛЧИТ — 3D</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { overflow:hidden; background:#000; font-family:'Courier New',monospace; }
+  canvas { display:block; }
+
+  .overlay {
+    position:fixed; inset:0; display:flex; flex-direction:column;
+    justify-content:center; align-items:center; text-align:center;
+    color:#ccc; z-index:50;
+  }
+  #startScreen { background:radial-gradient(circle at 50% 40%, #14202a 0%, #05070a 75%); cursor:pointer; }
+  #startScreen h1 { font-size:2.4em; letter-spacing:8px; color:#8fa8bb; text-shadow:0 0 25px rgba(120,180,255,.25); }
+  #startScreen h2 { font-size:1em; color:#5a6a76; margin:8px 0 28px; letter-spacing:4px; }
+  .story { max-width:560px; line-height:1.8; color:#8a9aa6; font-size:0.95em; margin-bottom:26px; }
+  .controls { color:#66788a; font-size:0.85em; line-height:2; margin-bottom:26px; }
+  .controls b { color:#a8bccb; }
+  .clickStart { color:#d8e4ec; font-size:1.1em; animation:pulse 1.6s infinite; letter-spacing:3px; }
+  @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+  .warn { margin-top:26px; color:#3d4a54; font-size:0.72em; max-width:480px; line-height:1.6; }
+
+  #pauseScreen { background:rgba(0,0,0,.7); display:none; cursor:pointer; }
+  #pauseScreen h2 { letter-spacing:4px; color:#9ab; }
+
+  #hud { position:fixed; top:16px; left:18px; color:#cfd8dd; z-index:20; font-size:0.95em;
+         text-shadow:0 1px 3px #000; display:none; }
+  #objective { position:fixed; top:16px; right:18px; color:#9fb3c0; z-index:20; font-size:0.85em;
+               text-shadow:0 1px 3px #000; max-width:300px; text-align:right; display:none; }
+  #prompt { position:fixed; bottom:70px; left:50%; transform:translateX(-50%); color:#ffe9a8; z-index:20;
+            font-size:1em; text-shadow:0 1px 4px #000; display:none; background:rgba(0,0,0,.45);
+            padding:8px 18px; border-radius:6px; }
+  #bigMsg { position:fixed; top:38%; left:50%; transform:translate(-50%,-50%); z-index:30;
+            color:#c94f5f; font-size:1.6em; letter-spacing:3px; text-shadow:0 0 30px #500;
+            opacity:0; transition:opacity 1s; pointer-events:none; text-align:center; }
+
+  #noteModal { position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:60;
+               display:none; justify-content:center; align-items:center; }
+  #noteBox { max-width:520px; width:90%; background:#14181d; border:1px solid #333c44;
+             border-radius:10px; padding:32px; color:#c9d4da; line-height:1.8; }
+  #noteBox h3 { color:#e0b96a; margin-bottom:16px; letter-spacing:2px; font-size:1.05em; }
+  #noteBox p { font-size:0.95em; margin-bottom:24px; }
+  #noteBox button { background:#233039; color:#cfd8dd; border:1px solid #45586a; border-radius:6px;
+                    padding:10px 22px; font-family:inherit; cursor:pointer; font-size:0.9em; }
+  #noteBox button:hover { background:#2f404c; }
+
+  #endScreen { background:rgba(0,0,0,.95); display:none; z-index:70; }
+  #endScreen h2 { color:#8b0000; letter-spacing:6px; font-size:1.8em; margin-bottom:22px; }
+  #endScreen p { max-width:520px; line-height:1.9; color:#8a969e; margin-bottom:30px; }
+  #endScreen button { background:#1c1c24; color:#ccc; border:1px solid #444; padding:12px 30px;
+                      font-family:inherit; cursor:pointer; border-radius:6px; }
+
+  #vignette { position:fixed; inset:0; pointer-events:none; z-index:15;
+              background:radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.9) 100%);
+              opacity:0.15; transition:opacity 2s; }
+  #fade { position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; z-index:65; transition:opacity 3s; }
+</style>
+</head>
+<body>
+
+<div id="startScreen" class="overlay">
+  <h1>ДОЛИНА МОЛЧИТ</h1>
+  <h2>фан-хоррор прототип по мотивам</h2>
+  <div class="story">
+    Ёжик проснулся — и понял, что Долина молчит.<br>
+    Ни Кроша, ни Нюши, ни Лосяша. Двери открыты. Чай остыл.<br>
+    Найди <b style="color:#e0b96a">8 улик</b> возле домов друзей и узнай, что случилось.<br>
+    А потом... реши, идти ли к центру.
+  </div>
+  <div class="controls">
+    <b>WASD</b> — движение &nbsp;|&nbsp; <b>Мышь</b> — камера &nbsp;|&nbsp; <b>Shift</b> — бег<br>
+    <b>Пробел</b> — прыжок &nbsp;|&nbsp; <b>E</b> — подобрать / читать улику
+  </div>
+  <div class="clickStart">▶ КЛИКНИ, ЧТОБЫ ВОЙТИ В ДОЛИНУ</div>
+  <div class="warn">Фанатский некоммерческий прототип. Персонажи стилизованы и собраны из примитивов.<br>Включи звук в наушниках 🎧</div>
+</div>
+
+<div id="pauseScreen" class="overlay"><h2>ПАУЗА — КЛИКНИ, ЧТОБЫ ПРОДОЛЖИТЬ</h2></div>
+
+<div id="hud">🔍 Улики: <span id="clueCount">0</span> / 8</div>
+<div id="objective">Осмотрись. Что-то не так...</div>
+<div id="prompt"></div>
+<div id="bigMsg"></div>
+<div id="vignette"></div>
+<div id="fade"></div>
+
+<div id="noteModal">
+  <div id="noteBox">
+    <h3 id="noteTitle"></h3>
+    <p id="noteText"></p>
+    <button id="noteClose">Закрыть [E]</button>
+  </div>
+</div>
+
+<div id="endScreen" class="overlay">
+  <h2 id="endTitle"></h2>
+  <p id="endText"></p>
+  <button onclick="location.reload()">🔄 Начать заново</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ============================================================
+   ДОЛИНА МОЛЧИТ — 3D прототип
+   ============================================================ */
+
+// ---------- Базовые переменные ----------
+let scene, camera, renderer, clock;
+let player, legL, legR, armL, armR, bodyRef;
+let started = false, ended = false, noteOpen = false;
+let yaw = Math.PI, pitch = 0.38;
+let vy = 0, onGround = true;
+const keys = {};
+let shake = 0;
+
+const colliders = [];   // {x, z, r}
+const clouds = [];
+let figures = [], figureTimer = 0;
+
+// Улики
+const clues = [];
+let collected = 0, stage = 0;
+
+// Атмосфера (цели, к которым плавно идём)
+const atm = { sky:new THREE.Color(0x8fb8d8), fogFar:130, fogNear:40, light:1.05 };
+const atmTarget = { sky:new THREE.Color(0x8fb8d8), fogFar:130, fogNear:40, light:1.05 };
+let sun, hemi, fogColor = new THREE.Color(0xa8c4d8);
+
+// Яма и сущность
+let hole = null, entity = null;
+
+// ---------- Данные улик ----------
+const CLUE_DATA = [
+  { title:"🐰 Мяч Кроша", mesh:()=>{ const m=new THREE.Mesh(new THREE.SphereGeometry(.3,16,16), new THREE.MeshLambertMaterial({color:0x4fc3f7})); m.scale.y=.55; return m; },
+    text:"Мяч сдут. Не проколот — просто сдут, как будто воздух вышел сам. На боку выцарапано: «МЫ ПРЫГАЛИ СЛИШКОМ ВЫСОКО. ОНО ЛОВИТ ВСЁ КРУГЛОЕ»." },
+  { title:"🐷 Осколок зеркала Нюши", mesh:()=>new THREE.Mesh(new THREE.TetrahedronGeometry(.32), new THREE.MeshLambertMaterial({color:0xbfe8f0, emissive:0x224455})),
+    text:"Осколок зеркала. Отражение в нём запаздывает на полсекунды. Губной помадой написано: «НЕ СМОТРИ В ОТРАЖЕНИЯ. ОНИ ЗАПОМИНАЮТ ТЕБЯ»." },
+  { title:"🦌 Страница журнала Лосяша", mesh:()=>new THREE.Mesh(new THREE.BoxGeometry(.45,.08,.6), new THREE.MeshLambertMaterial({color:0x8d6e63})),
+    text:"«Долина — это НЕ долина. Долина — это ПАСТЬ. Мы не жили здесь. Нас здесь ДЕРЖАЛИ. Чем круглее форма, тем быстрее катишься вниз. π × МЫ = 0. Простите меня все.»" },
+  { title:"🐻 Банка Копатыча", mesh:()=>new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,.4,12), new THREE.MeshLambertMaterial({color:0xffb300, transparent:true, opacity:.8})),
+    text:"Банка мёда. Мёд внутри движется сам — медленно течёт по кругу. На крышке нацарапано: «НЕ КОПАЙ ГЛУБЖЕ ТРЁХ ЛОПАТ. Я СЛЫШАЛ, КАК ОНО ДЫШИТ»." },
+  { title:"🦉 Рецепт Совуньи", mesh:()=>new THREE.Mesh(new THREE.PlaneGeometry(.45,.55), new THREE.MeshLambertMaterial({color:0xffffff, side:THREE.DoubleSide})),
+    text:"«Рецепт: лыжи, сон, свежий воздух. Принимать ежедневно.» Внизу другим почерком: «Лекарства больше не помогут. Оно поёт по ночам. Мы уже подпеваем.»" },
+  { title:"🐧 Чертёж Пина", mesh:()=>new THREE.Mesh(new THREE.PlaneGeometry(.55,.45), new THREE.MeshLambertMaterial({color:0xffe082, side:THREE.DoubleSide})),
+    text:"Рисунок: восемь круглых фигур держатся за лапы вокруг чёрного круга. Подпись: «ЭТО НЕ ЯМА. ЭТО ГЛАЗ. ОН СМОТРЕЛ ВСЁ ЭТО ВРЕМЯ»." },
+  { title:"🐦 Пластинка Кар-Карыча", mesh:()=>new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,.03,24), new THREE.MeshLambertMaterial({color:0x111111})),
+    text:"Треснувшая пластинка. Если приложить ухо — слышна колыбельная. На конверте: «Мой последний концерт. Зрители ушли давно. Но кто-то всё ещё слушает. Снизу.»" },
+  { title:"🐑 Листок Бараша", mesh:()=>new THREE.Mesh(new THREE.PlaneGeometry(.4,.5), new THREE.MeshLambertMaterial({color:0xf0e6ff, side:THREE.DoubleSide})),
+    text:"Стихотворение, обрывающееся на середине: «Мы все катились и катились... к краю. Но края не увидел никто. Только круглый горизонт. Только круглый голод.»" }
+];
+
+// Дома друзей
+const HOUSES = [
+  { name:"Ёжик",     c:0xe8a15a, roof:0xa55e32, isHome:true },
+  { name:"Крош",     c:0x4fc3f7, roof:0x2b7fb0 },
+  { name:"Нюша",     c:0xf48fb1, roof:0xc2557f },
+  { name:"Бараш",    c:0xb39ddb, roof:0x7e6aa8 },
+  { name:"Лосяш",    c:0xffd54f, roof:0xc49a2a },
+  { name:"Копатыч",  c:0xa1887f, roof:0x6e5344 },
+  { name:"Совунья",  c:0x9575cd, roof:0x5e4a8a },
+  { name:"Пин",      c:0x90a4ae, roof:0x4a5a63 },
+  { name:"Кар-Карыч",c:0xe57373, roof:0x9c3d3d }
+];
+
+// ---------- Инициализация ----------
+function init() {
+  scene = new THREE.Scene();
+  scene.background = atm.sky.clone();
+  scene.fog = new THREE.Fog(fogColor.clone(), atm.fogNear, atm.fogFar);
+
+  camera = new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.1, 300);
+  renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.body.appendChild(renderer.domElement);
+
+  hemi = new THREE.HemisphereLight(0xcfe6f5, 0x5a7048, 0.9);
+  scene.add(hemi);
+
+  sun = new THREE.DirectionalLight(0xfff2d8, 1.05);
+  sun.position.set(30, 50, 20);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
+  sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
+  sun.shadow.camera.far = 150;
+  scene.add(sun);
+
+  buildGround();
+  buildHills();
+  buildHouses();
+  buildTrees();
+  buildFlowers();
+  buildClouds();
+  buildClues();
+
+  player = createYozhik();
+  // Спавн у дома Ёжика
+  const a0 = houseAngle(0);
+  player.position.set(Math.sin(a0)*30, 0, Math.cos(a0)*30);
+  scene.add(player);
+
+  clock = new THREE.Clock();
+  addEventListener('resize', onResize);
+  animate();
+}
+
+function houseAngle(i){ return (i / HOUSES.length) * Math.PI * 2; }
+
+// ---------- Ландшафт ----------
+function buildGround() {
+  const g = new THREE.Mesh(
+    new THREE.CircleGeometry(62, 48),
+    new THREE.MeshLambertMaterial({ color:0x7cb356 })
+  );
+  g.rotation.x = -Math.PI/2;
+  g.receiveShadow = true;
+  scene.add(g);
+
+  // Тропинка-кольцо
+  const path = new THREE.Mesh(
+    new THREE.RingGeometry(24, 27, 48),
+    new THREE.MeshLambertMaterial({ color:0xc2a878 })
+  );
+  path.rotation.x = -Math.PI/2;
+  path.position.y = 0.01;
+  path.receiveShadow = true;
+  scene.add(path);
+
+  // Пятна травы
+  for (let i=0;i<35;i++){
+    const r = Math.random()*52, a = Math.random()*Math.PI*2;
+    const patch = new THREE.Mesh(
+      new THREE.CircleGeometry(1+Math.random()*2.5, 10),
+      new THREE.MeshLambertMaterial({ color: Math.random()<.5 ? 0x6fa34c : 0x86bd60 })
+    );
+    patch.rotation.x = -Math.PI/2;
+    patch.position.set(Math.sin(a)*r, 0.015, Math.cos(a)*r);
+    scene.add(patch);
+  }
+}
+
+function buildHills() {
+  const mat = new THREE.MeshLambertMaterial({ color:0x689a4a });
+  for (let i=0;i<14;i++){
+    const a = (i/14)*Math.PI*2 + Math.random()*.3;
+    const r = 58 + Math.random()*8;
+    const h = new THREE.Mesh(new THREE.SphereGeometry(14+Math.random()*10, 12, 10), mat);
+    h.scale.y = 0.42;
+    h.position.set(Math.sin(a)*r, -2, Math.cos(a)*r);
+    scene.add(h);
+  }
+}
+
+// ---------- Дома ----------
+function buildHouses() {
+  HOUSES.forEach((h, i) => {
+    const a = houseAngle(i);
+    const R = 34;
+    const house = createHouse(h.c, h.roof);
+    house.position.set(Math.sin(a)*R, 0, Math.cos(a)*R);
+    house.rotation.y = a + Math.PI; // дверь к центру
+    scene.add(house);
+    colliders.push({ x:house.position.x, z:house.position.z, r:2.6 });
+  });
+}
+
+function createHouse(color, roofColor) {
+  const g = new THREE.Group();
+  const m = c => new THREE.MeshLambertMaterial({ color:c });
+
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.2, 2.6, 20), m(color));
+  base.position.y = 1.3; base.castShadow = true; base.receiveShadow = true;
+  g.add(base);
+
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(2.7, 2.2, 20), m(roofColor));
+  roof.position.y = 3.7; roof.castShadow = true;
+  g.add(roof);
+
+  const chimney = new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,.9,8), m(0x8a7f75));
+  chimney.position.set(.8, 4.3, -.4);
+  g.add(chimney);
+
+  const door = new THREE.Mesh(new THREE.PlaneGeometry(.95, 1.5), m(0x5b3a29));
+  door.position.set(0, .78, 2.16);
+  g.add(door);
+
+  [-1.15, 1.15].forEach(x => {
+    const frame = new THREE.Mesh(new THREE.CircleGeometry(.42, 16), m(0x4a3626));
+    frame.position.set(x*Math.cos(.55), 1.6, 0);
+    frame.rotation.y = x>0 ? .55 : -.55;
+    frame.translateZ(2.02);
+    const glass = new THREE.Mesh(new THREE.CircleGeometry(.32, 16), m(0xbfe3ee));
+    glass.position.copy(frame.position);
+    glass.rotation.copy(frame.rotation);
+    glass.translateZ(.02);
+    g.add(frame, glass);
+  });
+  return g;
+}
+
+// ---------- Деревья, цветы, облака ----------
+function buildTrees() {
+  for (let i=0;i<38;i++){
+    const a = Math.random()*Math.PI*2;
+    const r = 10 + Math.random()*44;
+    const x = Math.sin(a)*r, z = Math.cos(a)*r;
+    if (r > 22 && r < 30) continue; // не на тропинке
+    if (nearHouse(x, z, 6)) continue;
+    if (Math.hypot(x, z) < 8) continue; // центр свободен
+    const birch = Math.random() < .6;
+    const tree = birch ? createBirch() : createFir();
+    tree.position.set(x, 0, z);
+    tree.rotation.y = Math.random()*Math.PI*2;
+    scene.add(tree);
+    colliders.push({ x, z, r:.55 });
+  }
+}
+function nearHouse(x, z, d) {
+  return HOUSES.some((h,i)=>{
+    const a = houseAngle(i);
+    return Math.hypot(x-Math.sin(a)*34, z-Math.cos(a)*34) < d;
+  });
+}
+function createBirch() {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.13,.19,2.6,8),
+    new THREE.MeshLambertMaterial({ color:0xf0ede4 }));
+  trunk.position.y = 1.3; trunk.castShadow = true;
+  g.add(trunk);
+  for (let i=0;i<4;i++){
+    const mark = new THREE.Mesh(new THREE.BoxGeometry(.1,.07,.06),
+      new THREE.MeshLambertMaterial({ color:0x3a3a3a }));
+    const a = Math.random()*Math.PI*2;
+    mark.position.set(Math.sin(a)*.16, .4+Math.random()*2, Math.cos(a)*.16);
+    mark.rotation.y = a;
+    g.add(mark);
+  }
+  const leafMat = new THREE.MeshLambertMaterial({ color:0x6aa84f });
+  [[0,3.1,0,1.3],[.6,2.7,.3,.9],[-.5,2.8,-.4,.8]].forEach(([x,y,z,r])=>{
+    const s = new THREE.Mesh(new THREE.SphereGeometry(r,10,10), leafMat);
+    s.position.set(x,y,z); s.castShadow = true;
+    g.add(s);
+  });
+  return g;
+}
+function createFir() {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.12,.17,1,7),
+    new THREE.MeshLambertMaterial({ color:0x6e4f35 }));
+  trunk.position.y = .5;
+  g.add(trunk);
+  const m = new THREE.MeshLambertMaterial({ color:0x3e7a4a });
+  [[1.3,1.4],[1,2.2],[.65,3]].forEach(([r,y],i)=>{
+    const c = new THREE.Mesh(new THREE.ConeGeometry(r,1.1,10), m);
+    c.position.y = y; c.castShadow = true;
+    g.add(c);
+  });
+  return g;
+}
+function buildFlowers() {
+  const colors = [0xff6b8a, 0xffd166, 0xffffff, 0xc084fc, 0xff9e5e];
+  for (let i=0;i<120;i++){
+    const a = Math.random()*Math.PI*2;
+    const r = 3 + Math.random()*50;
+    const x = Math.sin(a)*r, z = Math.cos(a)*r;
+    if (nearHouse(x,z,3.5)) continue;
+    const f = new THREE.Group();
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(.02,.02,.3,5),
+      new THREE.MeshLambertMaterial({ color:0x4a8a3a }));
+    stem.position.y = .15;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(.09,8,8),
+      new THREE.MeshLambertMaterial({ color:colors[i%colors.length] }));
+    head.position.y = .33;
+    f.add(stem, head);
+    f.position.set(x,0,z);
+    scene.add(f);
+  }
+}
+function buildClouds() {
+  for (let i=0;i<6;i++){
+    const cg = new THREE.Group();
+    const m = new THREE.MeshLambertMaterial({ color:0xffffff });
+    for (let j=0;j<3;j++){
+      const s = new THREE.Mesh(new THREE.SphereGeometry(2+Math.random()*2, 8, 8), m);
+      s.position.set(j*2.4-2.4, Math.random(), Math.random()*2);
+      s.scale.y = .55;
+      cg.add(s);
+    }
+    const a = Math.random()*Math.PI*2;
+    cg.position.set(Math.sin(a)*40, 26+Math.random()*8, Math.cos(a)*40);
+    cg.userData.speed = .3+Math.random()*.5;
+    scene.add(cg);
+    clouds.push(cg);
+  }
+}
+
+// ---------- Ёжик (улучшенная версия) ----------
+function createYozhik() {
+  const g = new THREE.Group();
+
+  // Палитра, близкая к оригиналу
+  const bodyMat  = new THREE.MeshLambertMaterial({ color: 0xC74B5B }); // малиновый
+  const spikeMat = new THREE.MeshLambertMaterial({ color: 0x4A3455 }); // тёмно-лиловые иголки
+  const limbMat  = new THREE.MeshLambertMaterial({ color: 0x8A3844 }); // лапки темнее
+  const frameMat = new THREE.MeshLambertMaterial({ color: 0x1A1A1A }); // чёрная оправа
+  const white = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+  const black = new THREE.MeshBasicMaterial({ color: 0x101010 });
+
+  // Тело — идеальный шар
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 32), bodyMat);
+  body.position.y = 0.62;
+  body.castShadow = true;
+  g.add(body);
+  bodyRef = body;
+
+  // ИГОЛКИ — равномерно по всей задней полусфере (распределение Фибоначчи)
+  const N = 60;
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < N; i++) {
+    const y = 1 - (i / (N - 1)) * 2;
+    const rad = Math.sqrt(1 - y * y);
+    const th = golden * i;
+    const x = Math.cos(th) * rad;
+    const z = Math.sin(th) * rad;
+    if (z > 0.2) continue; // лицо оставляем гладким
+    const dir = new THREE.Vector3(x, y, z).normalize();
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.34, 6), spikeMat);
+    spike.position.copy(dir.clone().multiplyScalar(0.5).add(new THREE.Vector3(0, 0.62, 0)));
+    spike.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    spike.castShadow = true;
+    g.add(spike);
+  }
+
+  // БОЛЬШИЕ КРУГЛЫЕ ОЧКИ
+  const lensMat = new THREE.MeshLambertMaterial({
+    color: 0xDDEEFF, transparent: true, opacity: 0.5
+  });
+  [-1, 1].forEach(s => {
+    const lens = new THREE.Mesh(new THREE.CircleGeometry(0.18, 24), lensMat);
+    lens.position.set(s * 0.19, 0.72, 0.485);
+    g.add(lens);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.026, 10, 24), frameMat);
+    rim.position.set(s * 0.19, 0.72, 0.49);
+    g.add(rim);
+  });
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.032, 0.03), frameMat);
+  bridge.position.set(0, 0.74, 0.49);
+  g.add(bridge);
+
+  // Глаза за стёклами
+  [-1, 1].forEach(s => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.10, 12, 12), white);
+    eye.position.set(s * 0.19, 0.72, 0.44);
+    eye.scale.z = 0.5;
+    g.add(eye);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 10), black);
+    pupil.position.set(s * 0.19, 0.72, 0.50);
+    g.add(pupil);
+  });
+
+  // Носик
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 12), black);
+  nose.position.set(0, 0.58, 0.50);
+  nose.scale.set(1, 0.8, 1);
+  g.add(nose);
+
+  // Улыбка
+  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.016, 8, 14, Math.PI), black);
+  mouth.position.set(0, 0.52, 0.49);
+  mouth.rotation.z = Math.PI; // дуга вниз = улыбка
+  g.add(mouth);
+
+  // Ушки
+  [-1, 1].forEach(s => {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 12), bodyMat);
+    ear.position.set(s * 0.20, 1.08, 0.12);
+    ear.scale.y = 1.3;
+    ear.castShadow = true;
+    g.add(ear);
+  });
+
+  // КОРОТКИЕ ЛАПКИ
+  legL = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.075, 0.28, 10), limbMat);
+  legL.position.set(-0.16, 0.14, 0.05);
+  legR = legL.clone();
+  legR.position.x = 0.16;
+  g.add(legL, legR);
+  [-0.16, 0.16].forEach(x => {
+    const foot = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 10), limbMat);
+    foot.position.set(x, 0.03, 0.10);
+    foot.scale.set(1, 0.5, 1.3);
+    g.add(foot);
+  });
+  armL = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.24, 10), limbMat);
+  armL.position.set(-0.46, 0.60, 0.10);
+  armL.rotation.z = 0.6;
+  armR = armL.clone();
+  armR.position.x = 0.46;
+  armR.rotation.z = -0.6;
+  g.add(armL, armR);
+
+  return g;
+}
+
+// ---------- Улики ----------
+function buildClues() {
+  for (let i=1; i<=8; i++){
+    const a = houseAngle(i);
+    const r = 29;
+    const x = Math.sin(a)*r, z = Math.cos(a)*r;
+    const data = CLUE_DATA[i-1];
+
+    const grp = new THREE.Group();
+    const mesh = data.mesh();
+    mesh.position.y = 1;
+    grp.add(mesh);
+
+    // Луч света-маяк
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(.04,.35,3,8,1,true),
+      new THREE.MeshBasicMaterial({ color:0xffe9a8, transparent:true, opacity:.22,
+        blending:THREE.AdditiveBlending, depthWrite:false })
+    );
+    beam.position.y = 1.5;
+    grp.add(beam);
+
+    const ring = new THREE.Mesh(new THREE.RingGeometry(.5,.7,24),
+      new THREE.MeshBasicMaterial({ color:0xffe9a8, transparent:true, opacity:.5, side:THREE.DoubleSide }));
+    ring.rotation.x = -Math.PI/2; ring.position.y = .03;
+    grp.add(ring);
+
+    grp.position.set(x, 0, z);
+    scene.add(grp);
+    clues.push({ group:grp, mesh, data, collected:false, baseY:0 });
+  }
+}
+
+// ---------- Звук ----------
+let audioCtx = null, droneGain = null;
+function initAudio() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const o1 = audioCtx.createOscillator(); o1.type='sine'; o1.frequency.value = 52;
+  const o2 = audioCtx.createOscillator(); o2.type='triangle'; o2.frequency.value = 52.7;
+  droneGain = audioCtx.createGain(); droneGain.gain.value = 0.0;
+  o1.connect(droneGain); o2.connect(droneGain);
+  droneGain.connect(audioCtx.destination);
+  o1.start(); o2.start();
+
+  // Ветер
+  const len = audioCtx.sampleRate*2;
+  const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i=0;i<len;i++) d[i] = Math.random()*2-1;
+  const noise = audioCtx.createBufferSource();
+  noise.buffer = buf; noise.loop = true;
+  const filt = audioCtx.createBiquadFilter();
+  filt.type='lowpass'; filt.frequency.value = 350;
+  const ng = audioCtx.createGain(); ng.gain.value = .025;
+  noise.connect(filt); filt.connect(ng); ng.connect(audioCtx.destination);
+  noise.start();
+}
+function stinger() {
+  if (!audioCtx) return;
+  [220, 233, 311].forEach((f, i) => {
+    const o = audioCtx.createOscillator();
+    o.type = 'sawtooth'; o.frequency.value = f;
+    const gn = audioCtx.createGain();
+    gn.gain.setValueAtTime(.06, audioCtx.currentTime);
+    gn.gain.exponentialRampToValueAtTime(.0001, audioCtx.currentTime + 1.4);
+    o.connect(gn); gn.connect(audioCtx.destination);
+    o.start(audioCtx.currentTime + i*.05);
+    o.stop(audioCtx.currentTime + 1.5);
+  });
+}
+let lastBeat = 0;
+function heartbeat(t) {
+  if (!audioCtx || stage < 2 || t - lastBeat < (1.4 - stage*.25)) return;
+  lastBeat = t;
+  const o = audioCtx.createOscillator();
+  o.type='sine'; o.frequency.value = 48;
+  const gn = audioCtx.createGain();
+  gn.gain.setValueAtTime(.25, audioCtx.currentTime);
+  gn.gain.exponentialRampToValueAtTime(.0001, audioCtx.currentTime + .22);
+  o.connect(gn); gn.connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime + .3);
+}
+
+// ---------- Управление ----------
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'KeyE') {
+    if (noteOpen) closeNote();
+    else tryInteract();
+  }
+});
+addEventListener('keyup', e => keys[e.code] = false);
+addEventListener('mousemove', e => {
+  if (document.pointerLockElement !== renderer?.domElement) return;
+  yaw -= e.movementX * .0026;
+  pitch -= e.movementY * .0026;
+  pitch = Math.max(-.15, Math.min(1.1, pitch));
+});
+
+document.getElementById('startScreen').addEventListener('click', () => {
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('hud').style.display = 'block';
+  document.getElementById('objective').style.display = 'block';
+  started = true;
+  initAudio();
+  renderer.domElement.requestPointerLock();
+});
+document.getElementById('pauseScreen').addEventListener('click', () => {
+  renderer.domElement.requestPointerLock();
+});
+document.addEventListener('pointerlockchange', () => {
+  const locked = document.pointerLockElement === renderer?.domElement;
+  document.getElementById('pauseScreen').style.display =
+    (started && !locked && !ended && !noteOpen) ? 'flex' : 'none';
+});
+document.getElementById('noteClose').addEventListener('click', closeNote);
+
+// ---------- Взаимодействие ----------
+function tryInteract() {
+  if (!started || ended || noteOpen) return;
+  for (const c of clues) {
+    if (c.collected) continue;
+    const d = player.position.distanceTo(c.group.position);
+    if (d < 2.6) { openNote(c); return; }
+  }
+}
+function openNote(c) {
+  noteOpen = true;
+  c.collected = true;
+  scene.remove(c.group);
+  collected++;
+  document.getElementById('clueCount').textContent = collected;
+  document.getElementById('noteTitle').textContent = c.data.title;
+  document.getElementById('noteText').textContent = c.data.text;
+  document.getElementById('noteModal').style.display = 'flex';
+  stinger();
+  updateStage();
+}
+function closeNote() {
+  noteOpen = false;
+  document.getElementById('noteModal').style.display = 'none';
+  renderer.domElement.requestPointerLock();
+}
+
+// ---------- Прогрессия ужаса ----------
+function updateStage() {
+  const obj = document.getElementById('objective');
+  if (collected <= 2) stage = 0;
+  else if (collected <= 5) stage = 1;
+  else if (collected <= 7) stage = 2;
+  else stage = 3;
+
+  if (stage === 1) {
+    atmTarget.sky.set(0x7d8a94); atmTarget.fogFar = 95; atmTarget.fogNear = 25; atmTarget.light = .75;
+    obj.textContent = "Свет стал тусклее... Ищи дальше.";
+  } else if (stage === 2) {
+    atmTarget.sky.set(0x4a4054); atmTarget.fogFar = 60; atmTarget.fogNear = 15; atmTarget.light = .42;
+    obj.textContent = "Сумерки. Кто-то стоит на границе тумана...";
+  } else if (stage === 3) {
+    atmTarget.sky.set(0x0b0b12); atmTarget.fogFar = 34; atmTarget.fogNear = 6; atmTarget.light = .14;
+    spawnHole();
+    obj.innerHTML = '<span style="color:#c94f5f">ОНО ПРОСНУЛОСЬ.</span><br>Иди к центру... или беги к краю долины.';
+    showBigMsg("ЗЕМЛЯ СОДРОГНУЛАСЬ.<br>В ЦЕНТРЕ ОТКРЫЛАСЬ ЯМА.");
+    shake = 1.2;
+  }
+  if (droneGain) droneGain.gain.linearRampToValueAtTime(stage * .02, audioCtx.currentTime + 3);
+  document.getElementById('vignette').style.opacity = (.15 + stage * .22).toFixed(2);
+}
+
+function showBigMsg(txt) {
+  const el = document.getElementById('bigMsg');
+  el.innerHTML = txt;
+  el.style.opacity = 1;
+  setTimeout(()=> el.style.opacity = 0, 4500);
+}
+
+function spawnHole() {
+  hole = new THREE.Mesh(new THREE.CircleGeometry(6, 40),
+    new THREE.MeshBasicMaterial({ color:0x000000 }));
+  hole.rotation.x = -Math.PI/2;
+  hole.position.y = .03;
+  scene.add(hole);
+
+  const rim = new THREE.Mesh(new THREE.RingGeometry(6, 6.7, 40),
+    new THREE.MeshLambertMaterial({ color:0x1a1216, side:THREE.DoubleSide }));
+  rim.rotation.x = -Math.PI/2; rim.position.y = .04;
+  scene.add(rim);
+
+  // Сущность в яме
+  entity = new THREE.Group();
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(3.4, 24, 24),
+    new THREE.MeshBasicMaterial({ color:0x050507 }));
+  ball.position.y = 1.2;
+  entity.add(ball);
+  [-1,1].forEach(s=>{
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(.32, 10, 10),
+      new THREE.MeshBasicMaterial({ color:0xffffff }));
+    eye.position.set(s*.9, 2.1, 2.9);
+    entity.add(eye);
+  });
+  scene.add(entity);
+}
+
+// ---------- Силуэты в тумане ----------
+function updateFigures(dt, t) {
+  if (stage >= 2 && !ended) {
+    figureTimer -= dt;
+    if (figureTimer <= 0 && figures.length < 3) {
+      figureTimer = 12 + Math.random()*10;
+      const a = Math.random()*Math.PI*2;
+      const r = 42 + Math.random()*8;
+      const f = new THREE.Group();
+      const b = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 12),
+        new THREE.MeshBasicMaterial({ color:0x05050a }));
+      b.position.y = 1.1; b.scale.y = 1.15;
+      f.add(b);
+      [-1,1].forEach(s=>{
+        const e = new THREE.Mesh(new THREE.SphereGeometry(.08,6,6),
+          new THREE.MeshBasicMaterial({ color:0xdddddd }));
+        e.position.set(s*.3, 1.5, .95);
+        f.add(e);
+      });
+      f.position.set(Math.sin(a)*r, 0, Math.cos(a)*r);
+      scene.add(f);
+      figures.push(f);
+    }
+  }
+  figures = figures.filter(f => {
+    const d = player.position.distanceTo(f.position);
+    if (d < 12) { scene.remove(f); return false; }
+    f.lookAt(player.position.x, 1.2, player.position.z);
+    return true;
+  });
+}
+
+// ---------- Концовки ----------
+function endGame(type) {
+  if (ended) return;
+  ended = true;
+  document.exitPointerLock();
+  document.getElementById('fade').style.opacity = 1;
+  setTimeout(()=>{
+    const T = document.getElementById('endTitle'), X = document.getElementById('endText');
+    if (type === 'circle') {
+      T.textContent = "КРУГ ЗАМКНУЛСЯ";
+      X.innerHTML = "Ты подошёл к краю. Колыбельная стала громче мыслей.<br><br>Мелодия обняла тебя. Тело стало легче. Гладче. Круглее.<br><br>Ты открыл рот и улыбнулся.<br><br><i style='color:#555'>Долина молчит. Долина сыта. До ждёт следующего.</i>";
+    } else {
+      T.textContent = "БЕГУЩИЙ";
+      X.innerHTML = "Ты рванул прочь — и холмы расступились. Впервые.<br><br>Ты бежал всю ночь. За спиной никто не гнался. Это хуже всего.<br><br><i style='color:#555'>Потому что ты знаешь: долина не отпустила тебя.<br>Она просто запомнила. И теперь знает, где тебя найти.</i>";
+    }
+    document.getElementById('endScreen').style.display = 'flex';
+  }, 3000);
+}
+
+// ---------- Игровой цикл ----------
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), .05);
+  const t = clock.elapsedTime;
+
+  if (started && !ended && !noteOpen) {
+    // Движение
+    const fwd = { x:Math.sin(yaw), z:Math.cos(yaw) };
+    const right = { x:Math.sin(yaw + Math.PI/2), z:Math.cos(yaw + Math.PI/2) };
+    let mx = 0, mz = 0;
+    if (keys['KeyW']) { mx += fwd.x; mz += fwd.z; }
+    if (keys['KeyS']) { mx -= fwd.x; mz -= fwd.z; }
+    if (keys['KeyA']) { mx -= right.x; mz -= right.z; }
+    if (keys['KeyD']) { mx += right.x; mz += right.z; }
+    const moving = (mx || mz);
+    if (moving) {
+      const len = Math.hypot(mx, mz);
+      const speed = keys['ShiftLeft'] || keys['ShiftRight'] ? 10 : 6;
+      player.position.x += (mx/len)*speed*dt;
+      player.position.z += (mz/len)*speed*dt;
+      const target = Math.atan2(mx, mz);
+      let diff = target - player.rotation.y;
+      while (diff > Math.PI) diff -= Math.PI*2;
+      while (diff < -Math.PI) diff += Math.PI*2;
+      player.rotation.y += diff * Math.min(1, dt*12);
+    }
+    // Прыжок / гравитация
+    if (keys['Space'] && onGround) { vy = 6.5; onGround = false; }
+    vy -= 18*dt;
+    player.position.y += vy*dt;
+    if (player.position.y <= 0) { player.position.y = 0; vy = 0; onGround = true; }
+
+    // Граница долины
+    const distC = Math.hypot(player.position.x, player.position.z);
+    if (stage === 3 && distC > 55) endGame('run');
+    if (distC > 58) {
+      const k = 58/distC;
+      player.position.x *= k; player.position.z *= k;
+    }
+    // Яма в центре (только на 3-й стадии)
+    if (stage === 3 && Math.hypot(player.position.x, player.position.z) < 7) endGame('circle');
+
+    // Столкновения
+    for (const c of colliders) {
+      const dx = player.position.x - c.x, dz = player.position.z - c.z;
+      const d = Math.hypot(dx, dz), min = c.r + .45;
+      if (d < min && d > .001) {
+        player.position.x = c.x + dx/d*min;
+        player.position.z = c.z + dz/d*min;
+      }
+    }
+
+    // Анимация ходьбы
+    if (moving && onGround) {
+      const sw = Math.sin(t*11)*.6;
+      legL.rotation.x = sw; legR.rotation.x = -sw;
+      armL.rotation.x = -sw*.6; armR.rotation.x = sw*.6;
+      bodyRef.position.y = .62 + Math.abs(Math.sin(t*11))*.04;
+    } else {
+      legL.rotation.x = legR.rotation.x = 0;
+      armL.rotation.x = armR.rotation.x = 0;
+      bodyRef.position.y = .62 + Math.sin(t*2)*.015;
+    }
+  }
+
+  // Анимация улик
+  for (const c of clues) {
+    if (c.collected) continue;
+    c.mesh.rotation.y += dt*1.5;
+    c.mesh.position.y = 1 + Math.sin(t*2 + c.group.position.x)*.15;
+  }
+
+  // Подсказка
+  let promptTxt = '';
+  for (const c of clues) {
+    if (!c.collected && player && player.position.distanceTo(c.group.position) < 2.6) {
+      promptTxt = '[E] ' + c.data.title;
+      break;
+    }
+  }
+  const pEl = document.getElementById('prompt');
+  pEl.textContent = promptTxt;
+  pEl.style.display = promptTxt ? 'block' : 'none';
+
+  updateFigures(dt, t);
+  heartbeat(t);
+
+  // Облака дрейфуют и темнеют
+  clouds.forEach(cg => {
+    cg.rotation.y += dt*.01*cg.userData.speed;
+    cg.children.forEach(ch => ch.material.color.lerp(
+      stage>=2 ? new THREE.Color(0x3a3a44) : new THREE.Color(0xffffff), dt*.5));
+  });
+
+  // Плавная атмосфера
+  scene.background.lerp(atmTarget.sky, dt*.8);
+  scene.fog.color.copy(scene.background);
+  scene.fog.far += (atmTarget.fogFar - scene.fog.far)*dt*.8;
+  scene.fog.near += (atmTarget.fogNear - scene.fog.near)*dt*.8;
+  sun.intensity += (atmTarget.light - sun.intensity)*dt*.8;
+  hemi.intensity = .25 + sun.intensity*.6;
+
+  // Сущность смотрит на игрока
+  if (entity) entity.lookAt(player.position.x, 0, player.position.z);
+
+  // Тряска
+  shake = Math.max(0, shake - dt*.6);
+
+  // Камера
+  if (player) {
+    const dist = 6;
+    const cx = player.position.x - Math.sin(yaw)*dist*Math.cos(pitch);
+    const cz = player.position.z - Math.cos(yaw)*dist*Math.cos(pitch);
+    const cy = player.position.y + 1.4 + Math.sin(pitch)*dist;
+    const sx = (Math.random()-.5)*shake*.3;
+    const sy = (Math.random()-.5)*shake*.3;
+    camera.position.set(cx+sx, cy+sy, cz+sx);
+    camera.lookAt(player.position.x, player.position.y + 1.1, player.position.z);
+  }
+
+  renderer.render(scene, camera);
+}
+
+function onResize() {
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
+
+init();
+</script>
+</body>
+</html>
