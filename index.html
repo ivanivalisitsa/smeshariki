@@ -658,7 +658,7 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => keys[e.code] = false);
 addEventListener('mousemove', e => {
-  if (document.pointerLockElement !== renderer?.domElement) return;
+  if (document.pointerLockElement !== renderer?.domElement || !started) return;
   yaw -= e.movementX * .0026;
   pitch -= e.movementY * .0026;
   pitch = Math.max(-.15, Math.min(1.1, pitch));
