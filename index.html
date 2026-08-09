@@ -177,6 +177,8 @@ function init() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.domElement.tabIndex = 0;
+  renderer.domElement.style.outline = 'none';
   document.body.appendChild(renderer.domElement);
 
   hemi = new THREE.HemisphereLight(0xcfe6f5, 0x5a7048, 0.9);
@@ -524,9 +526,11 @@ document.getElementById('startScreen').addEventListener('click', () => {
   document.getElementById('objective').style.display = 'block';
   started = true;
   initAudio();
+  renderer.domElement.focus();
   renderer.domElement.requestPointerLock();
 });
 document.getElementById('pauseScreen').addEventListener('click', () => {
+  renderer.domElement.focus();
   renderer.domElement.requestPointerLock();
 });
 document.addEventListener('pointerlockchange', () => {
@@ -560,6 +564,7 @@ function openNote(c) {
 function closeNote() {
   noteOpen = false;
   document.getElementById('noteModal').style.display = 'none';
+  renderer.domElement.focus();
   renderer.domElement.requestPointerLock();
 }
 
